@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.errors import register_error_handlers
 from app.items.router import router as items_router
+from app.notifications.router import router as notifications_router
 
 app = FastAPI(title="Newtonite Ops API", version="0.1.0")
 
@@ -27,6 +28,7 @@ register_error_handlers(app)
 
 app.include_router(auth_router)
 app.include_router(items_router)
+app.include_router(notifications_router)
 
 
 @app.get("/health")
