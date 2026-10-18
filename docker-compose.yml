@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-newtonite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newtonite}
+      POSTGRES_DB: ${POSTGRES_DB:-newtonite}
+    ports:
+      # 5433 on the host so it never clashes with a locally installed Postgres on 5432.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-newtonite}:${POSTGRES_PASSWORD:-newtonite}@db:5432/${POSTGRES_DB:-newtonite}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:8080"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-newtonite}:${POSTGRES_PASSWORD:-newtonite}@db:5432/${POSTGRES_DB:-newtonite}
+    depends_on:
+      api:
+        condition: service_healthy  # api applies migrations before it reports healthy
+
+volumes:
+  pgdata:
