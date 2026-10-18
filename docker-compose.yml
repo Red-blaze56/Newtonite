@@ -35,12 +35,20 @@ services:
 
   worker:
     build: ./backend
-    command: ["python", "-m", "app.worker"]
+    command: ["python", "-m", "app.notifications.worker"]
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-newtonite}:${POSTGRES_PASSWORD:-newtonite}@db:5432/${POSTGRES_DB:-newtonite}
     depends_on:
       api:
         condition: service_healthy  # api applies migrations before it reports healthy
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"  # open http://localhost:8080
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

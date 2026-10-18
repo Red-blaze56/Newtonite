@@ -12,7 +12,7 @@ node_modules/
 dist/
 
 # Local tool settings
-.claude/settings.local.json
+.claude/
 
 # Editors / OS
 .vscode/
