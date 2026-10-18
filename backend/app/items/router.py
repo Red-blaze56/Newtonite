@@ -6,7 +6,7 @@ which handles the optional `Idempotency-Key` header and owns the commit.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -36,7 +36,7 @@ IdempotencyKey = Annotated[
     Header(alias="Idempotency-Key", description="Client-generated unique key; a retry with the same key replays the first response"),
 ]
 
-CONFLICT_DOC = {409: {"description": "Version conflict, already claimed, or invalid workflow move"}}
+CONFLICT_DOC = {status.HTTP_409_CONFLICT: {"description": "Version conflict, already claimed, or invalid workflow move"}}
 
 
 # --- reads -------------------------------------------------------------------------------------
@@ -47,7 +47,7 @@ def list_items(
     user: CurrentUserDep,
     session: SessionDep,
     team_id: int | None = None,
-    status: Annotated[list[Status] | None, Query()] = None,
+    status_filter: Annotated[list[Status] | None, Query(alias="status")] = None,
     priority: Annotated[list[Priority] | None, Query()] = None,
     type: Annotated[list[ItemType] | None, Query()] = None,
     assignee: Annotated[str | None, Query(description="'me', 'unassigned' or a user id")] = None,
@@ -61,7 +61,7 @@ def list_items(
 ) -> ItemPage:
     filters = service_query.ItemFilters(
         team_id=team_id,
-        status=status,
+        status=status_filter,
         priority=priority,
         type=type,
         assignee=assignee,
@@ -99,7 +99,7 @@ def dashboard_counts(user: CurrentUserDep, session: SessionDep) -> DashboardCoun
 # --- writes ------------------------------------------------------------------------------------
 
 
-@router.post("/items", status_code=201, response_model=ItemDetail)
+@router.post("/items", status_code=status.HTTP_201_CREATED, response_model=ItemDetail)
 def create_item(body: ItemCreate, user: CurrentUserDep, session: SessionDep, key: IdempotencyKey = None) -> JSONResponse:
     return execute_mutation(
         session,
@@ -160,7 +160,7 @@ def transition_item(
     )
 
 
-@router.post("/items/{item_id}/comments", status_code=201, response_model=ActivityOut)
+@router.post("/items/{item_id}/comments", status_code=status.HTTP_201_CREATED, response_model=ActivityOut)
 def add_comment(
     item_id: int, body: CommentIn, user: CurrentUserDep, session: SessionDep, key: IdempotencyKey = None
 ) -> JSONResponse:

@@ -13,6 +13,7 @@ Rules that hold for every function in this module:
 
 from typing import Any
 
+from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -102,7 +103,7 @@ def create_item(session: Session, user: CurrentUser, data: ItemCreate) -> tuple[
     session.flush()  # assigns item.id
     _record(session, item.id, user.id, EventKind.CREATED, {"title": item.title, "type": item.type, "priority": item.priority})
     session.refresh(item)
-    return 201, item_detail(session, user, item)
+    return status.HTTP_201_CREATED, item_detail(session, user, item)
 
 
 def claim_item(session: Session, user: CurrentUser, item_id: int) -> tuple[int, ItemDetail]:
@@ -123,7 +124,7 @@ def claim_item(session: Session, user: CurrentUser, item_id: int) -> tuple[int, 
 
     if claimed is None:
         if item.assignee_id == user.id:
-            return 200, item_detail(session, user, item)  # already yours: a repeated click is a no-op
+            return status.HTTP_200_OK, item_detail(session, user, item)  # already yours: a repeated click is a no-op
         if item.assignee_id is None:
             raise Conflict(f"Only open items can be claimed (this one is {item.status})", code="not_claimable")
         raise Conflict(
@@ -132,7 +133,7 @@ def claim_item(session: Session, user: CurrentUser, item_id: int) -> tuple[int, 
             details={"current": item_detail(session, user, item)},
         )
     _record(session, item.id, user.id, EventKind.ASSIGNEE_CHANGED, {"from": None, "to": user.id, "via": "claim"})
-    return 200, item_detail(session, user, item)
+    return status.HTTP_200_OK, item_detail(session, user, item)
 
 
 def update_item(session: Session, user: CurrentUser, item_id: int, data: ItemUpdate) -> tuple[int, ItemDetail]:
@@ -152,11 +153,11 @@ def update_item(session: Session, user: CurrentUser, item_id: int, data: ItemUpd
         if new != old:
             changes[field] = {"from": old, "to": new}
     if not changes:
-        return 200, item_detail(session, user, item)  # nothing to change: no version bump, no event
+        return status.HTTP_200_OK, item_detail(session, user, item)  # nothing to change: no version bump, no event
 
     _versioned_update(session, user, item, data.expected_version, **{k: v["to"] for k, v in changes.items()})
     _record(session, item.id, user.id, EventKind.EDITED, {"changes": changes})
-    return 200, item_detail(session, user, item)
+    return status.HTTP_200_OK, item_detail(session, user, item)
 
 
 def assign_item(session: Session, user: CurrentUser, item_id: int, data: AssignIn) -> tuple[int, ItemDetail]:
@@ -169,7 +170,7 @@ def assign_item(session: Session, user: CurrentUser, item_id: int, data: AssignI
     _check_version(session, user, item, data.expected_version)
 
     if target == item.assignee_id:
-        return 200, item_detail(session, user, item)
+        return status.HTTP_200_OK, item_detail(session, user, item)
     if target is None and item.status is not Status.OPEN:
         # Invariant: work in progress always has an owner.
         raise Conflict("Move the item back to open before removing its assignee", code="cannot_unassign_active")
@@ -196,7 +197,7 @@ def assign_item(session: Session, user: CurrentUser, item_id: int, data: AssignI
             {"item_id": item.id, "user_id": target, "actor_id": user.id},
             dedupe_key=f"{JobKind.NOTIFY_ASSIGNED}:{item.id}:v{item.version}",
         )
-    return 200, item_detail(session, user, item)
+    return status.HTTP_200_OK, item_detail(session, user, item)
 
 
 def transition_item(session: Session, user: CurrentUser, item_id: int, data: TransitionIn) -> tuple[int, ItemDetail]:
@@ -229,7 +230,7 @@ def transition_item(session: Session, user: CurrentUser, item_id: int, data: Tra
             },
             dedupe_key=f"{JobKind.NOTIFY_APPROVAL_DECIDED}:{item.id}:v{item.version}",
         )
-    return 200, item_detail(session, user, item)
+    return status.HTTP_200_OK, item_detail(session, user, item)
 
 
 def add_comment(session: Session, user: CurrentUser, item_id: int, data: CommentIn) -> tuple[int, ActivityOut]:
@@ -240,7 +241,7 @@ def add_comment(session: Session, user: CurrentUser, item_id: int, data: Comment
     event = _record(session, item.id, user.id, EventKind.COMMENT, {"body": data.body})
     session.flush()
     session.refresh(event)
-    return 201, ActivityOut(
+    return status.HTTP_201_CREATED, ActivityOut(
         id=event.id,
         kind=event.kind,
         actor=UserRef(id=user.id, name=user.name),

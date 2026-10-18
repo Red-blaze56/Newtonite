@@ -6,7 +6,7 @@ Clients branch on `code` (stable, machine-readable), show `message` to humans, a
 
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class AppError(Exception):
-    status_code = 400
+    status_code = status.HTTP_400_BAD_REQUEST
     code = "bad_request"
 
     def __init__(
@@ -34,7 +34,7 @@ class AppError(Exception):
 
 
 class Unauthorized(AppError):
-    status_code = 401
+    status_code = status.HTTP_401_UNAUTHORIZED
     code = "unauthorized"
 
     def __init__(self, message: str = "Authentication required", **kw: Any):
@@ -43,24 +43,24 @@ class Unauthorized(AppError):
 
 
 class Forbidden(AppError):
-    status_code = 403
+    status_code = status.HTTP_403_FORBIDDEN
     code = "forbidden"
 
 
 class NotFound(AppError):
-    status_code = 404
+    status_code = status.HTTP_404_NOT_FOUND
     code = "not_found"
 
 
 class Conflict(AppError):
     """The request is valid but clashes with the current state (stale version, already claimed...)."""
 
-    status_code = 409
+    status_code = status.HTTP_409_CONFLICT
     code = "conflict"
 
 
 class Unprocessable(AppError):
-    status_code = 422
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     code = "invalid_request"
 
 
@@ -78,7 +78,7 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse(
-            error_body("validation_error", "The request is invalid", exc.errors()), status_code=422
+            error_body("validation_error", "The request is invalid", exc.errors()), status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
         )
 
     @app.exception_handler(StarletteHTTPException)
