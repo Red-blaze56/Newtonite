@@ -18,11 +18,12 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, insert, select, text
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
-from app.enums import EventKind, ItemType, Priority, Role, Status
-from app.models import ActivityEvent, Membership, Team, User, WorkItem
-from app.passwords import hash_password
-from app.workflow import REQUIRES_APPROVAL, check_transition
+from app.all_models import ActivityEvent, Membership, Team, User, WorkItem
+from app.auth.enums import Role
+from app.auth.passwords import hash_password
+from app.core.db import SessionLocal
+from app.items.enums import EventKind, ItemType, Priority, Status
+from app.items.workflow import REQUIRES_APPROVAL, check_transition
 
 DEMO_PASSWORD = "demo1234"
 # RFC 2606 reserved TLD: never a real domain, and accepted by EmailStr (".test" is not).

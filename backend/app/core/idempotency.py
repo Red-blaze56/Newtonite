@@ -22,18 +22,33 @@ The same key with a different request body is a client bug and gets 422.
 import hashlib
 import json
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
+from sqlalchemy import DateTime, ForeignKey, Index, SmallInteger, String, func, select, update
+from sqlalchemy.dialects.postgresql import JSONB, insert
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from app.errors import Unprocessable
-from app.models import IdempotencyKey
+from app.core.db import Base
+from app.core.errors import Unprocessable
 
 MAX_KEY_LENGTH = 200
+
+
+class IdempotencyKey(Base):
+    """Remembers the response to a mutating request so a retry gets the same answer."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (Index("ix_idempotency_created", "created_at"),)
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(MAX_KEY_LENGTH), primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64))
+    status_code: Mapped[int] = mapped_column(SmallInteger)
+    response: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 def request_fingerprint(method: str, path: str, body: Any) -> str:

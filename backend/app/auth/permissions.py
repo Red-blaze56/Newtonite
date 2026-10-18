@@ -11,9 +11,9 @@ Two layers:
 from enum import StrEnum
 from typing import Protocol
 
-from app.auth import CurrentUser
-from app.enums import Role
-from app.errors import Forbidden, NotFound
+from app.auth.enums import Role
+from app.auth.tokens import CurrentUser
+from app.core.errors import Forbidden, NotFound
 
 
 class Action(StrEnum):

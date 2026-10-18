@@ -15,12 +15,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.db import get_session
-from app.enums import Role
-from app.errors import Unauthorized
-from app.models import Membership, User
-from app.passwords import hash_password, verify_password
+from app.auth.enums import Role
+from app.auth.models import Membership, User
+from app.auth.passwords import hash_password, verify_password
+from app.core.config import settings
+from app.core.db import get_session
+from app.core.errors import Unauthorized
 
 ALGORITHM = "HS256"
 

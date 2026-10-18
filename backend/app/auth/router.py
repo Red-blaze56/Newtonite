@@ -1,17 +1,21 @@
+"""HTTP endpoints of the auth feature: log in, who am I, who is in a team."""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import CurrentUser, CurrentUserDep, authenticate, create_access_token, load_current_user
-from app.db import get_session
-from app.errors import Unauthorized
-from app.models import Team
-from app.permissions import role_in
-from app.schemas import LoginIn, MeOut, TeamRoleOut, TokenOut
+from app.auth.models import Membership, Team, User
+from app.auth.permissions import Action, authorize, role_in
+from app.auth.schemas import LoginIn, MeOut, TeamMemberOut, TeamRoleOut, TokenOut
+from app.auth.tokens import CurrentUser, CurrentUserDep, authenticate, create_access_token, load_current_user
+from app.core.db import get_session
+from app.core.errors import Unauthorized
 
 router = APIRouter(tags=["auth"])
+
+SessionDep = Annotated[Session, Depends(get_session)]
 
 
 def build_me(session: Session, user: CurrentUser) -> MeOut:
@@ -27,7 +31,7 @@ def build_me(session: Session, user: CurrentUser) -> MeOut:
 
 
 @router.post("/auth/login", response_model=TokenOut)
-def login(body: LoginIn, session: Annotated[Session, Depends(get_session)]) -> TokenOut:
+def login(body: LoginIn, session: SessionDep) -> TokenOut:
     user = authenticate(session, body.email, body.password)
     if user is None:
         # Same message for unknown email and wrong password: no account enumeration.
@@ -38,5 +42,18 @@ def login(body: LoginIn, session: Annotated[Session, Depends(get_session)]) -> T
 
 
 @router.get("/me", response_model=MeOut)
-def me(user: CurrentUserDep, session: Annotated[Session, Depends(get_session)]) -> MeOut:
+def me(user: CurrentUserDep, session: SessionDep) -> MeOut:
     return build_me(session, user)
+
+
+@router.get("/teams/{team_id}/members", response_model=list[TeamMemberOut])
+def team_members(team_id: int, user: CurrentUserDep, session: SessionDep) -> list[TeamMemberOut]:
+    """People in a team (used to pick an assignee). Visible to anyone in the team."""
+    authorize(user, Action.VIEW, team_id)
+    rows = session.execute(
+        select(User.id, User.name, User.email, Membership.role)
+        .join(Membership, Membership.user_id == User.id)
+        .where(Membership.team_id == team_id)
+        .order_by(User.name)
+    ).all()
+    return [TeamMemberOut(id=r.id, name=r.name, email=r.email, role=r.role) for r in rows]

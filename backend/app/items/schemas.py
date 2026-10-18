@@ -1,11 +1,11 @@
-"""Request and response bodies (validated at the API boundary by Pydantic)."""
+"""Request and response bodies of the items feature (validated at the API boundary by Pydantic)."""
 
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+from pydantic import AwareDatetime, BaseModel, Field, StringConstraints
 
-from app.enums import EventKind, ItemType, Priority, Role, Status
+from app.items.enums import EventKind, ItemType, Priority, Status
 
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 LongText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=10_000)]
@@ -14,49 +14,7 @@ Note = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2_000)
 Version = Annotated[int, Field(ge=1, description="The item version the client last saw")]
 
 
-# --- auth / teams -----------------------------------------------------------------------------
-
-
-class LoginIn(BaseModel):
-    # EmailStr rejects malformed addresses with a 422 before any database work. It only
-    # lower-cases the domain part, so authenticate() still normalises the whole address.
-    email: EmailStr
-    password: str = Field(min_length=1, max_length=200)
-
-
-class TeamRoleOut(BaseModel):
-    id: int
-    name: str
-    role: Role  # the caller's effective role in this team (admin for global admins)
-
-
-class MeOut(BaseModel):
-    id: int
-    email: str
-    name: str
-    is_admin: bool
-    teams: list[TeamRoleOut]
-
-
-class TokenOut(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: MeOut
-
-
-class UserBrief(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    email: str
-
-
-class TeamMemberOut(UserBrief):
-    role: Role
-
-
-# --- work items: requests ---------------------------------------------------------------------
+# --- requests ---------------------------------------------------------------------------------
 
 
 class ItemCreate(BaseModel):
@@ -93,7 +51,7 @@ class CommentIn(BaseModel):
     body: CommentBody
 
 
-# --- work items: responses --------------------------------------------------------------------
+# --- responses --------------------------------------------------------------------------------
 
 
 class UserRef(BaseModel):

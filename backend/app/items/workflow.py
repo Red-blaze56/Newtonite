@@ -10,9 +10,9 @@ Shortcuts and loops:
 Pure functions over enums, no database access, so the rules are easy to read and to test.
 """
 
-from app.enums import ItemType, Status
-from app.errors import Conflict, Unprocessable
-from app.permissions import Action
+from app.auth.permissions import Action
+from app.core.errors import Conflict, Unprocessable
+from app.items.enums import ItemType, Status
 
 # (from, to) -> the permission needed to make that move.
 TRANSITIONS: dict[tuple[Status, Status], Action] = {
