@@ -30,7 +30,7 @@ from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.enums import MEMBERSHIP_ROLES, ItemType, JobStatus, Priority, Role, Status
+from app.enums import MEMBERSHIP_ROLES, EventKind, ItemType, JobKind, JobStatus, Priority, Role, Status
 
 
 def text_enum(enum_cls: type[StrEnum], length: int = 30) -> SqlEnum:
@@ -122,6 +122,13 @@ class WorkItem(Base):
             text("updated_at DESC"),
             postgresql_where=text("status = 'awaiting_approval'"),
         ),
+        # "Overdue": only unfinished items that have a due date.
+        Index(
+            "ix_items_overdue",
+            "team_id",
+            "due_at",
+            postgresql_where=text("due_at IS NOT NULL AND status NOT IN ('resolved', 'closed')"),
+        ),
         Index("ix_items_search", "search_vector", postgresql_using="gin"),
     )
 
@@ -171,7 +178,7 @@ class ActivityEvent(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     item_id: Mapped[int] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"))
     actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    kind: Mapped[str] = mapped_column(String(40))
+    kind: Mapped[EventKind] = mapped_column(text_enum(EventKind, 40))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -200,7 +207,7 @@ class Job(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    kind: Mapped[str] = mapped_column(String(60))
+    kind: Mapped[JobKind] = mapped_column(text_enum(JobKind, 60))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
     # Same logical job enqueued twice (e.g. a retried request) collapses into one row.
     dedupe_key: Mapped[str] = mapped_column(String(200), unique=True)

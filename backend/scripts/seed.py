@@ -19,9 +19,10 @@ from sqlalchemy import func, insert, select, text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.enums import ItemType, Priority, Role, Status
+from app.enums import EventKind, ItemType, Priority, Role, Status
 from app.models import ActivityEvent, Membership, Team, User, WorkItem
 from app.passwords import hash_password
+from app.workflow import REQUIRES_APPROVAL, check_transition
 
 DEMO_PASSWORD = "demo1234"
 # RFC 2606 reserved TLD: never a real domain, and accepted by EmailStr (".test" is not).
@@ -101,7 +102,6 @@ STATUS_WEIGHTS = {
     Status.CLOSED: 20,
 }
 PRIORITY_WEIGHTS = {Priority.CRITICAL: 5, Priority.HIGH: 20, Priority.MEDIUM: 45, Priority.LOW: 30}
-REQUIRES_APPROVAL = {ItemType.PAYMENT, ItemType.COMPLIANCE}
 
 
 def database_has_data(session: Session) -> bool:
@@ -133,6 +133,12 @@ def status_path(item_type: ItemType, final: Status, rng: random.Random) -> list[
     if final is Status.CLOSED:
         path.append(Status.CLOSED)
     return path
+
+
+def assert_legal(item_type: ItemType, path: list[Status]) -> None:
+    """Fail loudly if the generator ever drifts from the real workflow rules in app/workflow.py."""
+    for frm, to in zip(path, path[1:]):
+        check_transition(item_type, frm, to, has_assignee=True, note="seed")
 
 
 def seed(session: Session, item_count: int, rng: random.Random) -> None:
@@ -182,29 +188,30 @@ def seed(session: Session, item_count: int, rng: random.Random) -> None:
         created_at = now - timedelta(days=rng.uniform(0, 120))
 
         path = status_path(item_type, final, rng)
+        assert_legal(item_type, path)
         # Open items: most are unowned (that is what makes "unassigned urgent" interesting).
         assignee = None
         if final is not Status.OPEN or rng.random() < 0.25:
             assignee = rng.choice(workers[tid])
 
         events: list[tuple[int, str, dict, datetime]] = [
-            (creator, "created", {"title": title, "type": item_type, "priority": priority}, created_at)
+            (creator, EventKind.CREATED, {"title": title, "type": item_type, "priority": priority}, created_at)
         ]
         t = created_at
         if assignee is not None:
             t += timedelta(minutes=rng.uniform(1, 600))
             via = "claim" if assignee == creator or rng.random() < 0.6 else "assign"
             actor = assignee if via == "claim" else rng.choice(leads[tid] or workers[tid])
-            events.append((actor, "assignee_changed", {"from": None, "to": assignee, "via": via}, t))
+            events.append((actor, EventKind.ASSIGNEE_CHANGED, {"from": None, "to": assignee, "via": via}, t))
         for prev, nxt in zip(path, path[1:]):
             t += timedelta(minutes=rng.uniform(5, 2880))
             # Approvals, rejections and closing are lead actions; the rest is done by the assignee.
             lead_action = prev is Status.AWAITING_APPROVAL or nxt is Status.CLOSED
             actor = rng.choice(leads[tid] or workers[tid]) if lead_action else assignee
-            events.append((actor, "status_changed", {"from": prev, "to": nxt}, t))
+            events.append((actor, EventKind.STATUS_CHANGED, {"from": prev, "to": nxt, "note": None}, t))
         if rng.random() < 0.4:
             t += timedelta(minutes=rng.uniform(1, 600))
-            events.append((rng.choice(workers[tid]), "comment", {"body": rng.choice(COMMENTS)}, t))
+            events.append((rng.choice(workers[tid]), EventKind.COMMENT, {"body": rng.choice(COMMENTS)}, t))
         if t > now:  # recent item whose generated history runs into the future: shift it all back
             shift = t - now
             created_at -= shift
@@ -225,7 +232,7 @@ def seed(session: Session, item_count: int, rng: random.Random) -> None:
                 if priority in (Priority.CRITICAL, Priority.HIGH)
                 else None,
                 # version counts every change after creation (comments do not change the item)
-                "version": 1 + sum(1 for e in events[1:] if e[1] != "comment"),
+                "version": 1 + sum(1 for e in events[1:] if e[1] is not EventKind.COMMENT),
                 "created_at": created_at,
                 "updated_at": t,
             }

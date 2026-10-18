@@ -49,3 +49,21 @@ class JobStatus(StrEnum):
     PENDING = "pending"
     DONE = "done"
     FAILED = "failed"
+
+
+class EventKind(StrEnum):
+    """Kinds of activity_events rows. One event per mutation (comments included)."""
+
+    CREATED = "created"
+    EDITED = "edited"  # payload: {"changes": {field: {"from": ..., "to": ...}}}
+    ASSIGNEE_CHANGED = "assignee_changed"  # payload: {"from", "to", "via": claim|assign|release}
+    STATUS_CHANGED = "status_changed"  # payload: {"from", "to", "note"}
+    COMMENT = "comment"  # payload: {"body"}
+
+
+class JobKind(StrEnum):
+    """Background jobs written to the outbox in the same transaction as the change."""
+
+    NOTIFY_ASSIGNED = "notify.assigned"
+    NOTIFY_APPROVAL_REQUESTED = "notify.approval_requested"
+    NOTIFY_APPROVAL_DECIDED = "notify.approval_decided"
